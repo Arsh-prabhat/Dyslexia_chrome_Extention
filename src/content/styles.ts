@@ -109,6 +109,18 @@ export function injectStyles(): void {
       outline-offset: 4px !important;
       border-radius: 4px !important;
     }
+
+    /* Simplified selection highlight badge */
+    mark.dr-simplified-selection {
+      background-color: #e0f2fe !important;
+      color: #0369a1 !important;
+      border: 1px solid #0284c7 !important;
+      border-radius: 4px !important;
+      padding: 2px 6px !important;
+      font-weight: 500 !important;
+      display: inline !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+    }
   `;
 }
 

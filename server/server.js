@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CacheEngine } from './cache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +28,13 @@ function getApiKey() {
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-const SYSTEM_INSTRUCTION = `You are a reading accessibility assistant. Rewrite the supplied text so that it is easier to understand for a reader with dyslexia or reading difficulties. Preserve meaning and factual information. Use shorter sentences, clear structure, familiar vocabulary, and explicit relationships between ideas. Do not remove important information. Do not invent information. CRITICAL REQUIREMENT: Output ONLY the simplified text directly. Do NOT include any intro like "Here is a simplified version", do NOT add markdown dividers like "---" or headers like "#". Just output the rewritten text paragraphs directly.`;
+const SYSTEM_INSTRUCTION = `You are a reading accessibility assistant for readers with dyslexia. Your goal is to rewrite the text to make it clear and easy to read WITHOUT summarizing or losing information.
+
+RULES:
+1. Preserve 100% of the original meaning, facts, names, dates, numbers, and details.
+2. Do NOT summarize or condense multiple paragraphs into a short overview. Rewrite EACH paragraph individually into clear, accessible sentences.
+3. Use shorter sentences, active voice, and clear, familiar vocabulary.
+4. Output ONLY the simplified text directly. Do NOT include any introductory phrases like "Here is a simplified version", do NOT add markdown dividers like "---" or headers like "#". Just output the rewritten text paragraphs directly.`;
 
 app.post('/api/simplify', async (req, res) => {
   try {
@@ -35,6 +42,18 @@ app.post('/api/simplify', async (req, res) => {
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return res.status(400).json({ error: 'Text field is required and must be non-empty.' });
+    }
+
+    // Check database cache first ($0 API cost & 0ms latency!)
+    const cachedResult = CacheEngine.get(text);
+    if (cachedResult) {
+      console.log(`[DyslexiaReader Cache Hit] Returned cached simplification for chunk ${chunkIndex + 1}/${totalChunks}`);
+      return res.json({
+        simplifiedText: cachedResult,
+        chunkIndex,
+        totalChunks,
+        cached: true
+      });
     }
 
     const apiKey = getApiKey();
@@ -55,7 +74,7 @@ app.post('/api/simplify', async (req, res) => {
           role: 'user',
           parts: [
             { text: SYSTEM_INSTRUCTION },
-            { text: `Simplify the following text:\n\n${text}` }
+            { text: `Simplify the following text paragraph by paragraph:\n\n${text}` }
           ]
         }
       ],
@@ -85,17 +104,22 @@ app.post('/api/simplify', async (req, res) => {
     }
 
     const data = await response.json();
-    const candidateText =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!candidateText) {
       return res.status(500).json({ error: 'Gemini API returned empty text response.' });
     }
 
+    const simplifiedText = candidateText.trim();
+
+    // Store in database cache for future requests
+    CacheEngine.set(text, simplifiedText);
+
     return res.json({
-      simplifiedText: candidateText.trim(),
+      simplifiedText,
       chunkIndex,
-      totalChunks
+      totalChunks,
+      cached: false
     });
   } catch (err) {
     console.error('[DyslexiaReader Backend] Internal error:', err);
@@ -106,11 +130,13 @@ app.post('/api/simplify', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    hasApiKey: Boolean(getApiKey())
+    hasApiKey: Boolean(getApiKey()),
+    cacheEntries: CacheEngine.size()
   });
 });
 
 app.listen(PORT, () => {
   console.log(`[DyslexiaReader Backend] Server listening on http://localhost:${PORT}`);
   console.log(`[DyslexiaReader Backend] GEMINI_API_KEY configured: ${Boolean(getApiKey())}`);
+  console.log(`[DyslexiaReader Backend] Database Cache Entries: ${CacheEngine.size()}`);
 });

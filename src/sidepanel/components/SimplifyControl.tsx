@@ -4,10 +4,16 @@ import { SimplifyStatus } from '../../shared/types';
 interface SimplifyControlProps {
   status: SimplifyStatus;
   error: string | null;
-  onSimplify: () => void;
+  onSimplifySelection: () => void;
+  onSimplifyFullPage: () => void;
 }
 
-export const SimplifyControl: React.FC<SimplifyControlProps> = ({ status, error, onSimplify }) => {
+export const SimplifyControl: React.FC<SimplifyControlProps> = ({
+  status,
+  error,
+  onSimplifySelection,
+  onSimplifyFullPage
+}) => {
   const isSimplifying = status === 'simplifying' || status === 'extracting';
 
   return (
@@ -16,20 +22,34 @@ export const SimplifyControl: React.FC<SimplifyControlProps> = ({ status, error,
         Make Text Easier
       </h2>
 
-      <button
-        type="button"
-        className="dr-btn dr-btn-primary"
-        onClick={onSimplify}
-        disabled={isSimplifying}
-        aria-busy={isSimplifying}
-        style={{ width: '100%', minHeight: 48, fontSize: 15 }}
-      >
-        {isSimplifying
-          ? status === 'extracting'
-            ? '🔍 Extracting Text...'
-            : '✨ Simplifying with Gemini...'
-          : '✨ Simplify Text'}
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button
+          type="button"
+          className="dr-btn dr-btn-primary"
+          onClick={onSimplifySelection}
+          disabled={isSimplifying}
+          aria-busy={isSimplifying}
+          style={{ width: '100%', minHeight: 44, fontSize: 14 }}
+          title="Highlight any text on the page first, or click to simplify selection"
+        >
+          {isSimplifying ? '✨ Simplifying Selection...' : '✂️ Simplify Selection'}
+        </button>
+
+        <button
+          type="button"
+          className="dr-btn"
+          onClick={onSimplifyFullPage}
+          disabled={isSimplifying}
+          aria-busy={isSimplifying}
+          style={{ width: '100%', minHeight: 40, fontSize: 13 }}
+        >
+          {isSimplifying ? '🔍 Extracting Page...' : '📄 Simplify Full Page'}
+        </button>
+      </div>
+
+      <p style={{ fontSize: 11, color: 'var(--dr-text-muted)', margin: '2px 0 0 0' }}>
+        💡 <strong>Tip:</strong> Highlight any sentence or paragraph with your mouse, then click <em>Simplify Selection</em> (or right-click) to save API costs & simplify instantly!
+      </p>
 
       {status === 'success' && (
         <div className="dr-status-box dr-status-info" role="status" aria-live="polite">
@@ -44,7 +64,7 @@ export const SimplifyControl: React.FC<SimplifyControlProps> = ({ status, error,
             <button
               type="button"
               className="dr-btn"
-              onClick={onSimplify}
+              onClick={onSimplifySelection}
               style={{ marginTop: 4, alignSelf: 'flex-start', minHeight: 36, padding: '4px 10px', fontSize: 12 }}
             >
               🔄 Retry

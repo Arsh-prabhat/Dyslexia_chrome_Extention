@@ -111,6 +111,11 @@ async function handleMessage(message: ExtensionMessage): Promise<any> {
       const success = await simplifierManager.simplifyPage(backendUrl);
       return { ...getPageState(), success };
 
+    case 'SIMPLIFY_SELECTION':
+      const url = message.payload?.backendApiUrl || currentSettings?.backendApiUrl;
+      const selSuccess = await simplifierManager.simplifySelectedText(message.payload?.selectedText, url);
+      return { ...getPageState(), success: selSuccess };
+
     case 'SHOW_SIMPLIFIED':
       simplifierManager.showSimplified();
       return getPageState();

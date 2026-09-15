@@ -30,7 +30,7 @@ export class SimplifierManager {
   }
 
   /**
-   * Triggers AI simplification flow by connecting to the backend Gemini service endpoint.
+   * Triggers AI simplification flow for full page text.
    */
   public async simplifyPage(backendUrl: string = 'http://localhost:3000/api/simplify'): Promise<boolean> {
     this.status = 'extracting';
@@ -112,6 +112,61 @@ export class SimplifierManager {
   }
 
   /**
+   * Simplifies ONLY the user selected text range.
+   */
+  public async simplifySelectedText(selectedText?: string, backendUrl: string = 'http://localhost:3000/api/simplify'): Promise<boolean> {
+    const textToSimplify = selectedText || window.getSelection()?.toString().trim();
+    if (!textToSimplify || textToSimplify.length < 3) {
+      return this.simplifyPage(backendUrl);
+    }
+
+    this.status = 'simplifying';
+    this.lastError = null;
+
+    try {
+      const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToSimplify })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server responded with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.simplifiedText) {
+        throw new Error('Backend returned empty simplified response.');
+      }
+
+      const cleanedText = this.cleanAiOutput(data.simplifiedText);
+
+      // Insert simplified text into current window selection range
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && selection.toString().trim()) {
+        const range = selection.getRangeAt(0);
+        const container = document.createElement('mark');
+        container.className = 'dr-simplified-selection';
+        container.title = '✨ Simplified with Dyslexia Reader';
+        container.innerText = cleanedText;
+
+        range.deleteContents();
+        range.insertNode(container);
+        selection.removeAllRanges();
+      }
+
+      this.status = 'success';
+      return true;
+    } catch (err: any) {
+      console.error('[DyslexiaReader] Selection simplify error:', err);
+      this.status = 'error';
+      this.lastError = err.message || 'Failed to simplify selected text.';
+      return false;
+    }
+  }
+
+  /**
    * Cleans raw AI markdown output (removes intros like "Here is a simplified version", "---", "#", etc.)
    */
   private cleanAiOutput(text: string): string {
@@ -148,6 +203,18 @@ export class SimplifierManager {
       el.innerHTML = originalHtml;
       el.classList.remove('dr-simplified-content');
     }
+
+    // Restore selected text marks
+    document.querySelectorAll('.dr-simplified-selection').forEach((mark) => {
+      const parent = mark.parentNode;
+      if (parent) {
+        while (mark.firstChild) {
+          parent.insertBefore(mark.firstChild, mark);
+        }
+        parent.removeChild(mark);
+        parent.normalize();
+      }
+    });
 
     this.currentViewMode = 'original';
   }

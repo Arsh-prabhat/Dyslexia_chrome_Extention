@@ -130,7 +130,18 @@ export const App: React.FC = () => {
     if (res) setPageState(res);
   };
 
-  const handleSimplifyText = async () => {
+  const handleSimplifySelection = async () => {
+    setPageState((prev) => ({ ...prev, simplifyStatus: 'simplifying', simplifyError: null }));
+    const res = await sendToActiveTab<PageState>({
+      type: 'SIMPLIFY_SELECTION',
+      payload: { backendApiUrl: settings.backendApiUrl }
+    });
+    if (res) {
+      setPageState(res);
+    }
+  };
+
+  const handleSimplifyFullPage = async () => {
     setPageState((prev) => ({ ...prev, simplifyStatus: 'extracting', simplifyError: null }));
     const res = await sendToActiveTab<PageState>({
       type: 'SIMPLIFY_TEXT',
@@ -206,7 +217,8 @@ export const App: React.FC = () => {
           <SimplifyControl
             status={pageState.simplifyStatus}
             error={pageState.simplifyError}
-            onSimplify={handleSimplifyText}
+            onSimplifySelection={handleSimplifySelection}
+            onSimplifyFullPage={handleSimplifyFullPage}
           />
 
           {pageState.hasSimplifiedText && (

@@ -42,6 +42,7 @@ export type MessageType =
   | 'SET_FOCUS_UNIT'
   | 'GET_PAGE_TEXT'
   | 'SIMPLIFY_TEXT'
+  | 'SIMPLIFY_SELECTION'
   | 'RESTORE_ORIGINAL'
   | 'SHOW_SIMPLIFIED'
   | 'START_READING'
