@@ -9,7 +9,7 @@ const cacheDir = path.join(__dirname, 'data');
 const cacheFilePath = path.join(cacheDir, 'cache.json');
 
 // Memory cache backed by disk JSON database
-let cacheMap = new Map<string, string>();
+let cacheMap = new Map();
 
 function initCache() {
   try {
@@ -37,29 +37,29 @@ function persistCache() {
   }
 }
 
-function getHash(text: string): string {
+function getHash(text) {
   return crypto.createHash('sha256').update(text.trim()).digest('hex');
 }
 
 initCache();
 
 export const CacheEngine = {
-  get(text: string): string | null {
+  get(text) {
     const hash = getHash(text);
     return cacheMap.get(hash) || null;
   },
 
-  set(text: string, simplifiedText: string): void {
+  set(text, simplifiedText) {
     const hash = getHash(text);
     cacheMap.set(hash, simplifiedText);
     persistCache();
   },
 
-  size(): number {
+  size() {
     return cacheMap.size;
   },
 
-  clear(): void {
+  clear() {
     cacheMap.clear();
     persistCache();
   }
