@@ -19,9 +19,15 @@ export class FocusModeManager {
   private currentHighlightMark: HTMLElement | null = null;
   private observer: MutationObserver | null = null;
   private processedNodes = new WeakSet<Node>();
+  private clickListener: ((e: MouseEvent) => void) | null = null;
+  private onUnitClickedCallback?: (unit: ReadingUnit, index: number) => void;
 
   constructor() {
     this.textExtractor = new TextExtractor();
+  }
+
+  public setOnUnitClicked(cb: (unit: ReadingUnit, index: number) => void): void {
+    this.onUnitClickedCallback = cb;
   }
 
   /**
@@ -32,17 +38,23 @@ export class FocusModeManager {
     this.isActive = true;
     this.buildReadingSequence(unitType);
     this.setupMutationObserver();
+    this.setupClickListener();
 
-    if (this.readingUnits.length > 0 && this.currentIndex === -1) {
+    // Check if user currently has selected text on page to use as starting point
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) {
+      this.setStartingFromSelection(selection.toString().trim());
+    } else if (this.readingUnits.length > 0 && this.currentIndex === -1) {
       this.highlightIndex(0);
     }
   }
 
   /**
-   * Disables Focus Mode and cleans up any active DOM highlights.
+   * Disables Focus Mode and cleans up any active DOM highlights and event listeners.
    */
   public disable(): void {
     this.removeCurrentHighlight();
+    this.removeClickListener();
     this.readingUnits = [];
     this.currentIndex = -1;
     this.isActive = false;
@@ -63,6 +75,7 @@ export class FocusModeManager {
 
   /**
    * Builds the sequence of readable units (word, sentence, paragraph) from page text nodes.
+   * Automatically skips navbars, headers, footers, and sidebars.
    */
   public buildReadingSequence(unitType: FocusUnit): ReadingUnit[] {
     const elements = this.textExtractor.getReadableElements();
@@ -85,7 +98,6 @@ export class FocusModeManager {
             unitType
           });
         } else if (unitType === 'sentence') {
-          // Split by sentence ending punctuation (. ! ?)
           const sentenceRegex = /[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g;
           let match: RegExpExecArray | null;
 
@@ -103,7 +115,6 @@ export class FocusModeManager {
             }
           }
         } else if (unitType === 'word') {
-          // Split by words
           const wordRegex = /\b[\w'-]+\b/g;
           let match: RegExpExecArray | null;
 
@@ -129,6 +140,43 @@ export class FocusModeManager {
   }
 
   /**
+   * Sets reading sequence starting position from clicked element.
+   */
+  public setStartingFromElement(targetEl: HTMLElement): number {
+    if (this.readingUnits.length === 0) {
+      this.buildReadingSequence(this.currentUnitType);
+    }
+
+    const index = this.readingUnits.findIndex(
+      (unit) => unit.element === targetEl || unit.element.contains(targetEl) || targetEl.contains(unit.element)
+    );
+
+    if (index !== -1) {
+      this.highlightIndex(index);
+      return index;
+    }
+    return -1;
+  }
+
+  /**
+   * Sets reading sequence starting position from selected text string.
+   */
+  public setStartingFromSelection(selectedText: string): number {
+    if (!selectedText) return -1;
+    const cleanSelection = selectedText.toLowerCase().trim();
+
+    const index = this.readingUnits.findIndex((unit) =>
+      unit.text.toLowerCase().includes(cleanSelection) || cleanSelection.includes(unit.text.toLowerCase())
+    );
+
+    if (index !== -1) {
+      this.highlightIndex(index);
+      return index;
+    }
+    return -1;
+  }
+
+  /**
    * Highlights the reading unit at the given index.
    */
   public highlightIndex(index: number): ReadingUnit | null {
@@ -141,7 +189,6 @@ export class FocusModeManager {
     const unit = this.readingUnits[index];
 
     try {
-      // Create DOM Range to surround target text
       const range = document.createRange();
       range.setStart(unit.textNode, Math.min(unit.startOffset, unit.textNode.length));
       range.setEnd(unit.textNode, Math.min(unit.endOffset, unit.textNode.length));
@@ -155,7 +202,6 @@ export class FocusModeManager {
       // Scroll element smoothly into view if needed
       mark.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (e) {
-      // Fallback if node structure shifted
       console.warn('[DyslexiaReader] Focus highlight range error:', e);
       unit.element.classList.add('dr-focus-active-container');
       unit.element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -207,11 +253,10 @@ export class FocusModeManager {
         parent.insertBefore(this.currentHighlightMark.firstChild, this.currentHighlightMark);
       }
       parent.removeChild(this.currentHighlightMark);
-      parent.normalize(); // Merge adjacent text nodes
+      parent.normalize();
       this.currentHighlightMark = null;
     }
 
-    // Remove active container classes
     document.querySelectorAll('.dr-focus-active-container').forEach((el) => {
       el.classList.remove('dr-focus-active-container');
     });
@@ -237,6 +282,31 @@ export class FocusModeManager {
     return textNodes;
   }
 
+  private setupClickListener(): void {
+    if (this.clickListener) return;
+
+    this.clickListener = (event: MouseEvent) => {
+      if (!this.isActive) return;
+      const target = event.target as HTMLElement;
+      if (!target || this.textExtractor.isExcludedElement(target)) return;
+
+      const index = this.setStartingFromElement(target);
+      if (index !== -1 && this.onUnitClickedCallback) {
+        const unit = this.readingUnits[index];
+        this.onUnitClickedCallback(unit, index);
+      }
+    };
+
+    document.addEventListener('click', this.clickListener, true);
+  }
+
+  private removeClickListener(): void {
+    if (this.clickListener) {
+      document.removeEventListener('click', this.clickListener, true);
+      this.clickListener = null;
+    }
+  }
+
   private setupMutationObserver(): void {
     if (this.observer) return;
 
@@ -253,7 +323,6 @@ export class FocusModeManager {
         }
       }
       if (hasNewReadable && this.isActive) {
-        // Rebuild sequence without resetting active reading index
         const currIndex = this.currentIndex;
         this.buildReadingSequence(this.currentUnitType);
         if (currIndex >= 0 && currIndex < this.readingUnits.length) {

@@ -1,5 +1,5 @@
 import { ReadingSpeed } from '../shared/types';
-import { FocusModeManager, ReadingUnit } from './focus-mode';
+import { FocusModeManager } from './focus-mode';
 
 export class SpeechEngine {
   private synth: SpeechSynthesis | null = null;
@@ -17,6 +17,13 @@ export class SpeechEngine {
     } else {
       console.warn('[DyslexiaReader] Web Speech API is not supported in this browser environment.');
     }
+
+    // Auto-update TTS audio when user clicks any text on the page
+    this.focusManager.setOnUnitClicked(() => {
+      if (this.isSpeaking || this.isPaused) {
+        this.speakCurrentUnit();
+      }
+    });
   }
 
   public isAvailable(): boolean {
@@ -30,7 +37,6 @@ export class SpeechEngine {
   public setSpeed(speed: ReadingSpeed): void {
     this.readingSpeed = speed;
     if (this.isSpeaking && this.currentUtterance && this.synth) {
-      // Re-speak current unit with new rate
       const currentUnit = this.focusManager.getCurrentUnit();
       if (currentUnit) {
         this.speakCurrentUnit();
@@ -53,9 +59,15 @@ export class SpeechEngine {
       this.focusManager.enable('sentence');
     }
 
-    const currentIndex = this.focusManager.getCurrentIndex();
-    if (currentIndex < 0) {
-      this.focusManager.highlightIndex(0);
+    // Check if user currently highlighted/selected text on page to use as starting point
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim()) {
+      this.focusManager.setStartingFromSelection(selection.toString().trim());
+    } else {
+      const currentIndex = this.focusManager.getCurrentIndex();
+      if (currentIndex < 0) {
+        this.focusManager.highlightIndex(0);
+      }
     }
 
     this.speakCurrentUnit();
@@ -123,7 +135,6 @@ export class SpeechEngine {
     };
 
     utterance.onend = () => {
-      // Automatically advance to next unit when current utterance completes
       if (this.isSpeaking) {
         const next = this.focusManager.nextUnit();
         if (next) {
