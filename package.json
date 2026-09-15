@@ -1,0 +1,30 @@
+{
+  "name": "dyslexia-reading-assistant",
+  "version": "1.0.0",
+  "description": "Chrome Extension to assist reading for people with dyslexia using custom fonts, typography tuning, focus mode, TTS, and AI text simplification.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/generate-assets.js && tsc && node scripts/build-extension.js && node scripts/copy-manifest.js",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "server": "node server/server.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^20.14.9",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "happy-dom": "^20.14.5",
+    "jsdom": "^27.0.1",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1",
+    "vitest": "^1.6.0"
+  }
+}
