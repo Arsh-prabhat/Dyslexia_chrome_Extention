@@ -23,7 +23,7 @@ export interface ReadableBlock {
 
 export class TextExtractor {
   /**
-   * Identifies and returns all readable HTML elements on the current webpage.
+   * Identifies and returns all readable HTML elements on the current webpage or PDF.
    */
   public getReadableElements(root: Element = document.body): HTMLElement[] {
     if (!root) return [];
@@ -52,11 +52,22 @@ export class TextExtractor {
       currentNode = walker.nextNode();
     }
 
+    // PDF / Canvas Text Layer Fallback: If no standard HTML tags found (e.g. PDF viewer)
+    if (elements.length === 0) {
+      const pdfSpans = Array.from(
+        document.querySelectorAll('.textLayer span, [role="document"] span, div.page span, embed[type="application/pdf"]')
+      ) as HTMLElement[];
+
+      if (pdfSpans.length > 0) {
+        return pdfSpans.filter((el) => (el.innerText || el.textContent || '').trim().length > 2);
+      }
+    }
+
     return elements;
   }
 
   /**
-   * Extracts clean, structured plain text from the webpage for AI processing.
+   * Extracts clean, structured plain text from the webpage or PDF for AI processing.
    */
   public extractPageText(): { fullText: string; blocks: ReadableBlock[] } {
     const readableElements = this.getReadableElements();
@@ -75,7 +86,13 @@ export class TextExtractor {
       }
     }
 
-    const fullText = textParts.join('\n\n');
+    // Fallback: If elements array was empty, extract plain body text (e.g. PDF canvas viewer)
+    let fullText = textParts.join('\n\n');
+    if (!fullText.trim() && typeof document !== 'undefined') {
+      const bodyText = (document.body ? document.body.innerText : document.documentElement.innerText) || '';
+      fullText = bodyText.trim();
+    }
+
     return { fullText, blocks };
   }
 
@@ -165,7 +182,7 @@ export class TextExtractor {
    */
   private isReadableElement(el: HTMLElement): boolean {
     const tag = el.tagName.toUpperCase();
-    const readableTags = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'DT', 'DD', 'BLOCKQUOTE', 'ARTICLE', 'SECTION']);
+    const readableTags = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'DT', 'DD', 'BLOCKQUOTE', 'ARTICLE', 'SECTION', 'SPAN']);
 
     if (readableTags.has(tag)) {
       const text = el.innerText ? el.innerText.trim() : el.textContent?.trim() || '';

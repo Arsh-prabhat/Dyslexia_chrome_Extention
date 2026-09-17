@@ -121,6 +121,63 @@ export function injectStyles(): void {
       display: inline !important;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
     }
+
+    /* Floating Simplified Card Overlay (For PDFs and documents) */
+    .dr-floating-overlay {
+      position: fixed !important;
+      bottom: 24px !important;
+      right: 24px !important;
+      z-index: 2147483647 !important;
+      max-width: 520px !important;
+      width: calc(100vw - 48px) !important;
+      max-height: 75vh !important;
+      overflow-y: auto !important;
+      font-family: var(--dr-font-family, OpenDyslexic, sans-serif) !important;
+      animation: drSlideUp 0.3s ease-out !important;
+    }
+
+    .dr-overlay-card {
+      background-color: #0f172a !important;
+      color: #f8fafc !important;
+      border: 2px solid #3b82f6 !important;
+      border-radius: 12px !important;
+      padding: 16px !important;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .dr-overlay-header {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      border-bottom: 1px solid #334155 !important;
+      padding-bottom: 10px !important;
+      margin-bottom: 12px !important;
+      font-weight: 700 !important;
+      font-size: 15px !important;
+      color: #60a5fa !important;
+    }
+
+    .dr-overlay-close {
+      background: #1e293b !important;
+      color: #f8fafc !important;
+      border: 1px solid #475569 !important;
+      border-radius: 6px !important;
+      padding: 4px 10px !important;
+      cursor: pointer !important;
+      font-size: 12px !important;
+    }
+
+    .dr-overlay-body {
+      font-size: var(--dr-font-size, 18px) !important;
+      line-height: var(--dr-line-height, 1.6) !important;
+      letter-spacing: var(--dr-letter-spacing, 1px) !important;
+      word-spacing: var(--dr-word-spacing, 2px) !important;
+    }
+
+    @keyframes drSlideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
   `;
 }
 

@@ -26,20 +26,22 @@ export class SimplifierManager {
   }
 
   public hasSimplifiedText(): boolean {
-    return this.simplifiedContentMap.size > 0;
+    return this.simplifiedContentMap.size > 0 || Boolean(document.getElementById('dr-simplified-overlay'));
   }
 
   /**
-   * Triggers AI simplification flow for full page text.
+   * Triggers AI simplification flow for full page or PDF text.
    */
   public async simplifyPage(backendUrl: string = 'http://localhost:3000/api/simplify'): Promise<boolean> {
     this.status = 'extracting';
     this.lastError = null;
 
+    const { fullText, blocks } = this.textExtractor.extractPageText();
     const readableElements = this.textExtractor.getReadableElements();
-    if (readableElements.length === 0) {
+
+    if (!fullText || fullText.trim().length < 5) {
       this.status = 'error';
-      this.lastError = 'No readable text content found on this page.';
+      this.lastError = 'No readable text content found on this page. If this is a PDF, please highlight text with your mouse and click Simplify Selection!';
       return false;
     }
 
@@ -50,10 +52,7 @@ export class SimplifierManager {
       }
     }
 
-    // Extract text blocks
-    const { fullText } = this.textExtractor.extractPageText();
     const chunks = this.textExtractor.chunkText(fullText, 3000);
-
     this.status = 'simplifying';
 
     try {
@@ -86,22 +85,27 @@ export class SimplifierManager {
       results.sort((a, b) => a.index - b.index);
 
       const combinedSimplifiedText = results.map((r) => r.text).join('\n\n');
-      const simplifiedParagraphs = combinedSimplifiedText.split(/\n\n+/);
 
-      // Map simplified paragraphs back to original elements cleanly
-      let pIndex = 0;
-      for (const el of readableElements) {
-        if (pIndex < simplifiedParagraphs.length) {
-          const simplifiedText = simplifiedParagraphs[pIndex].trim();
-          if (simplifiedText) {
-            this.simplifiedContentMap.set(el, simplifiedText);
+      // If standard DOM elements exist, map back to elements
+      if (readableElements.length > 0) {
+        const simplifiedParagraphs = combinedSimplifiedText.split(/\n\n+/);
+        let pIndex = 0;
+        for (const el of readableElements) {
+          if (pIndex < simplifiedParagraphs.length) {
+            const simplifiedText = simplifiedParagraphs[pIndex].trim();
+            if (simplifiedText) {
+              this.simplifiedContentMap.set(el, simplifiedText);
+            }
+            pIndex++;
           }
-          pIndex++;
         }
+        this.showSimplified();
       }
 
+      // Always display floating Card Overlay for PDFs or documents
+      this.showSimplifiedOverlay(combinedSimplifiedText);
+
       this.status = 'success';
-      this.showSimplified();
       return true;
     } catch (err: any) {
       console.error('[DyslexiaReader] Simplification error:', err);
@@ -142,18 +146,31 @@ export class SimplifierManager {
 
       const cleanedText = this.cleanAiOutput(data.simplifiedText);
 
-      // Insert simplified text into current window selection range
+      // Insert simplified text into selection if DOM allows, or show floating overlay card
       const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0 && selection.toString().trim()) {
-        const range = selection.getRangeAt(0);
-        const container = document.createElement('mark');
-        container.className = 'dr-simplified-selection';
-        container.title = '✨ Simplified with Dyslexia Reader';
-        container.innerText = cleanedText;
+      let insertedInline = false;
 
-        range.deleteContents();
-        range.insertNode(container);
-        selection.removeAllRanges();
+      if (selection && selection.rangeCount > 0 && selection.toString().trim()) {
+        try {
+          const range = selection.getRangeAt(0);
+          const container = document.createElement('mark');
+          container.className = 'dr-simplified-selection';
+          container.title = '✨ Simplified with Dyslexia Reader';
+          container.innerText = cleanedText;
+
+          range.deleteContents();
+          range.insertNode(container);
+          selection.removeAllRanges();
+          insertedInline = true;
+        } catch (e) {
+          // Range mutation not allowed (e.g. PDF canvas viewer), fallback to floating overlay card
+          insertedInline = false;
+        }
+      }
+
+      // Always show floating overlay card if inline replacement failed or on PDF
+      if (!insertedInline) {
+        this.showSimplifiedOverlay(cleanedText);
       }
 
       this.status = 'success';
@@ -167,15 +184,47 @@ export class SimplifierManager {
   }
 
   /**
+   * Displays floating Card Overlay with OpenDyslexic / Lexend font for PDFs & Webpages
+   */
+  public showSimplifiedOverlay(text: string): void {
+    let overlay = document.getElementById('dr-simplified-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'dr-simplified-overlay';
+      overlay.className = 'dr-floating-overlay';
+      (document.body || document.documentElement).appendChild(overlay);
+    }
+
+    const formattedHtml = text
+      .split(/\n\n+/)
+      .map((p) => `<p style="margin-bottom: 12px;">${p}</p>`)
+      .join('');
+
+    overlay.innerHTML = `
+      <div class="dr-overlay-card">
+        <div class="dr-overlay-header">
+          <span>✨ Dyslexia Reader — Simplified Content</span>
+          <button type="button" class="dr-overlay-close" onclick="document.getElementById('dr-simplified-overlay').remove()">✕ Close</button>
+        </div>
+        <div class="dr-overlay-body">
+          ${formattedHtml}
+        </div>
+      </div>
+    `;
+
+    overlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  /**
    * Cleans raw AI markdown output (removes intros like "Here is a simplified version", "---", "#", etc.)
    */
   private cleanAiOutput(text: string): string {
     if (!text) return '';
     return text
-      .replace(/^#+\s+/gm, '') // Remove Markdown headers (# ## ###)
-      .replace(/^---+$/gm, '')  // Remove Markdown horizontal rules (---)
-      .replace(/^(Here is|Here's|For easier reading:?|Simplified version:?).*?\n+/i, '') // Remove intros
-      .replace(/^\*\s+/gm, '')  // Clean bullet list markers for paragraph mapping
+      .replace(/^#+\s+/gm, '')
+      .replace(/^---+$/gm, '')
+      .replace(/^(Here is|Here's|For easier reading:?|Simplified version:?).*?\n+/i, '')
+      .replace(/^\*\s+/gm, '')
       .trim();
   }
 
@@ -197,6 +246,11 @@ export class SimplifierManager {
    * Restores the page DOM nodes back to their original unmodified HTML.
    */
   public restoreOriginal(): void {
+    const overlay = document.getElementById('dr-simplified-overlay');
+    if (overlay) {
+      overlay.remove();
+    }
+
     if (this.originalContentMap.size === 0) return;
 
     for (const [el, originalHtml] of this.originalContentMap.entries()) {
@@ -204,7 +258,6 @@ export class SimplifierManager {
       el.classList.remove('dr-simplified-content');
     }
 
-    // Restore selected text marks
     document.querySelectorAll('.dr-simplified-selection').forEach((mark) => {
       const parent = mark.parentNode;
       if (parent) {
