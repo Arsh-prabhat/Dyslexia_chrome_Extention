@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "node scripts/generate-assets.js && tsc && node scripts/build-extension.js && node scripts/copy-manifest.js",
+    "pack": "npm run build && powershell Compress-Archive -Path dist/* -DestinationPath Dyslexia_Reader_Extension.zip -Force",
     "preview": "vite preview",
     "test": "vitest run",
     "server": "node server/server.js"

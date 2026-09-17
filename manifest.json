@@ -33,7 +33,9 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content/content-script.js"],
-      "run_at": "document_end"
+      "run_at": "document_end",
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "web_accessible_resources": [
